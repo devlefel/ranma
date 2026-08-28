@@ -1,0 +1,5 @@
+[resend]
+bin = "resend"
+env = { RESEND_API_KEY = "{{api_key}}" }
+passthrough = ["help", "--help", "--version"]
+verify = ["domains", "list"]

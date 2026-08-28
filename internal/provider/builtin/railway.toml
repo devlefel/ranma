@@ -1,0 +1,7 @@
+[railway]
+bin = "railway"
+env = { RAILWAY_API_TOKEN = "{{token}}" }
+clear = ["RAILWAY_TOKEN"]
+passthrough = ["login", "logout", "help", "completion", "docs", "upgrade"]
+verify = ["whoami"]
+import = { kind = "railway-config", path = ".railway/config.json" }

@@ -1,0 +1,7 @@
+[gh]
+bin = "gh"
+env = { GH_TOKEN = "{{token}}" }
+clear = ["GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN"]
+passthrough = ["auth", "help", "completion", "version"]
+verify = ["api", "user", "--jq", ".login"]
+import = { kind = "gh-hosts", path = ".config/gh/hosts.yml" }
