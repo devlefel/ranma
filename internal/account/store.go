@@ -42,7 +42,7 @@ func Load(path string) (*Store, error) {
 		return nil, err
 	}
 	if _, err := toml.Decode(string(raw), &st.data); err != nil {
-		// Nunca embrulhe o conteúdo do arquivo na mensagem.
+		// Never wrap file content into the error message.
 		return nil, fmt.Errorf("ranma: %s não é um TOML válido", path)
 	}
 	return st, nil

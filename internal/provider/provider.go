@@ -85,7 +85,7 @@ func Load(userPath string) (*Registry, error) {
 		raw, err := os.ReadFile(userPath)
 		switch {
 		case errors.Is(err, fs.ErrNotExist):
-			// Sem arquivo do usuário: só os embutidos.
+			// No user file: the builtins stand alone.
 		case err != nil:
 			return nil, err
 		default:
