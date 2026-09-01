@@ -4,6 +4,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/devlefel/ranma/internal/account"
@@ -21,7 +22,7 @@ Uso:
   ranma ls [provider]             lista contas cadastradas
   ranma whoami                    mostra o que este diretório resolve
   ranma link <provider> <conta>   declara a conta no .ranma.toml
-  ranma add <provider> <conta>    cadastra credencial
+  ranma add [--import] <provider> <conta>  cadastra credencial
   ranma rm <provider> <conta>     remove credencial
   ranma shim install|uninstall    instala os interceptadores no PATH
   ranma hook install|uninstall    registra o hook do Claude Code
@@ -149,6 +150,7 @@ func cmdLink(args []string) error {
 
 func cmdAdd(args []string) error {
 	fs := flag.NewFlagSet("add", flag.ContinueOnError)
+	fs.SetOutput(io.Discard) // the flag package prints English usage; main reports the error
 	doImport := fs.Bool("import", false, "importa a credencial ativa do CLI nativo")
 	if err := fs.Parse(args); err != nil {
 		return err

@@ -75,6 +75,20 @@ func TestImportGhHostsUnknownAccountListsOptions(t *testing.T) {
 	}
 }
 
+func TestImportGhHostsEmptyToken(t *testing.T) {
+	body := "github.com:\n    users:\n        devlefel:\n            oauth_token: \"\"\n"
+	home := seed(t, ".config/gh/hosts.yml", body)
+	spec := &provider.ImportSpec{Kind: "gh-hosts", Path: ".config/gh/hosts.yml"}
+
+	_, err := importer.Import(spec, home, "devlefel")
+	if err == nil {
+		t.Fatal("quero erro: a conta existe mas não tem token")
+	}
+	if !strings.Contains(err.Error(), "oauth_token") {
+		t.Errorf("a mensagem deve dizer o que falta, deu: %v", err)
+	}
+}
+
 func TestImportMissingFile(t *testing.T) {
 	spec := &provider.ImportSpec{Kind: "railway-config", Path: ".railway/config.json"}
 	_, err := importer.Import(spec, t.TempDir(), "x")

@@ -32,7 +32,7 @@ func Import(spec *provider.ImportSpec, homeDir, accountName string) (map[string]
 			"ranma: %s não existe; faça o login no CLI nativo primeiro e rode o --import de novo", path)
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ranma: não consegui ler %s: %w", path, err)
 	}
 
 	switch spec.Kind {

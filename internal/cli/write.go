@@ -56,7 +56,8 @@ func Add(w io.Writer, reg *provider.Registry, st *account.Store, providerName, a
 		for _, field := range p.Fields() {
 			value, err := read(fmt.Sprintf("%s/%s — cole o valor de %s: ", providerName, accountName, field))
 			if err != nil {
-				return err
+				return fmt.Errorf("ranma: não consegui ler %s de %s/%s: %w",
+					field, providerName, accountName, err)
 			}
 			value = strings.TrimSpace(value)
 			if value == "" {
@@ -66,8 +67,11 @@ func Add(w io.Writer, reg *provider.Registry, st *account.Store, providerName, a
 		}
 	}
 
+	// Trim both paths, not just the prompted one: a token carrying a trailing
+	// newline would be injected into the child environment with it.
 	for _, field := range p.Fields() {
-		if strings.TrimSpace(fields[field]) == "" {
+		fields[field] = strings.TrimSpace(fields[field])
+		if fields[field] == "" {
 			return fmt.Errorf("ranma: campo %q ausente na credencial importada", field)
 		}
 	}
