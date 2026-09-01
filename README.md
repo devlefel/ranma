@@ -66,6 +66,9 @@ That file holds **account names only, never credentials** — commit it.
 | `ranma whoami` | what this directory resolves to |
 | `ranma doctor` | diagnose PATH, permissions, resolution |
 | `ranma doctor --verify` | additionally ask each provider whether the credential still works |
+| `ranma --version` | print the installed version |
+
+Flags come before positional arguments (`ranma add --import gh devlefel`).
 
 ## Built-in providers
 

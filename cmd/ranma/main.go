@@ -30,7 +30,14 @@ Uso:
   ranma shim install|uninstall    instala os interceptadores no PATH
   ranma hook install|uninstall    registra o hook do Claude Code
   ranma doctor [--verify]         diagnostica a instalação
+  ranma --version                 mostra a versão
+
+As flags vêm antes dos argumentos: ranma add --import gh devlefel
 `
+
+// version is set at build time by GoReleaser's ldflags. A tool installed by
+// piping a script from the internet must be able to say what it is.
+var version = "dev"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -60,6 +67,9 @@ func main() {
 		err = cmdDoctor(os.Args[2:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
+		return
+	case "-V", "--version", "version":
+		fmt.Printf("ranma %s\n", version)
 		return
 	default:
 		fmt.Fprintf(os.Stderr, "ranma: subcomando desconhecido %q\n\n%s", os.Args[1], usage)

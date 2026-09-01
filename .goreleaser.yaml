@@ -13,6 +13,8 @@ builds:
     goos: [linux, darwin]
     goarch: [amd64, arm64]
     ldflags:
+      # main.version is declared in cmd/ranma/main.go and printed by
+      # `ranma --version`; keep the symbol path in sync if main moves.
       - -s -w -X main.version={{.Version}}
 
 archives:
