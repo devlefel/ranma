@@ -2,6 +2,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -43,6 +44,10 @@ func main() {
 		err = cmdWhoami()
 	case "link":
 		err = cmdLink(os.Args[2:])
+	case "add":
+		err = cmdAdd(os.Args[2:])
+	case "rm":
+		err = cmdRm(os.Args[2:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return
@@ -140,4 +145,35 @@ func cmdLink(args []string) error {
 		return err
 	}
 	return cli.Link(os.Stdout, reg, st, cwd, args[0], args[1])
+}
+
+func cmdAdd(args []string) error {
+	fs := flag.NewFlagSet("add", flag.ContinueOnError)
+	doImport := fs.Bool("import", false, "importa a credencial ativa do CLI nativo")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 2 {
+		return fmt.Errorf("uso: ranma add [--import] <provider> <conta>")
+	}
+	reg, st, err := load()
+	if err != nil {
+		return err
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	return cli.Add(os.Stdout, reg, st, fs.Arg(0), fs.Arg(1), *doImport, cli.PromptSecret, home)
+}
+
+func cmdRm(args []string) error {
+	if len(args) != 2 {
+		return fmt.Errorf("uso: ranma rm <provider> <conta>")
+	}
+	_, st, err := load()
+	if err != nil {
+		return err
+	}
+	return cli.Remove(os.Stdout, st, args[0], args[1])
 }
