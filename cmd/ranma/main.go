@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/devlefel/ranma/internal/account"
 	"github.com/devlefel/ranma/internal/cli"
@@ -13,6 +14,7 @@ import (
 	"github.com/devlefel/ranma/internal/provider"
 	"github.com/devlefel/ranma/internal/resolve"
 	"github.com/devlefel/ranma/internal/runner"
+	"github.com/devlefel/ranma/internal/shim"
 )
 
 const usage = `ranma — a conta certa de CLI para cada projeto
@@ -49,6 +51,8 @@ func main() {
 		err = cmdAdd(os.Args[2:])
 	case "rm":
 		err = cmdRm(os.Args[2:])
+	case "shim":
+		err = cmdShim(os.Args[2:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return
@@ -178,4 +182,41 @@ func cmdRm(args []string) error {
 		return err
 	}
 	return cli.Remove(os.Stdout, st, args[0], args[1])
+}
+
+func cmdShim(args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("uso: ranma shim install|uninstall")
+	}
+	dir := paths.ShimDir()
+
+	switch args[0] {
+	case "install":
+		reg, _, err := load()
+		if err != nil {
+			return err
+		}
+		self, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		self, err = filepath.EvalSymlinks(self)
+		if err != nil {
+			return err
+		}
+		if err := shim.Install(dir, self, reg.Bins()); err != nil {
+			return err
+		}
+		fmt.Printf("✓ shims instalados em %s\n", dir)
+		fmt.Printf("  Adicione ao seu perfil do shell:\n    %s\n", shim.PathHint(dir))
+		return nil
+	case "uninstall":
+		if err := shim.Uninstall(dir); err != nil {
+			return err
+		}
+		fmt.Printf("✓ shims removidos de %s\n", dir)
+		return nil
+	default:
+		return fmt.Errorf("uso: ranma shim install|uninstall")
+	}
 }
