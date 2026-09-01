@@ -15,13 +15,25 @@ import (
 // ExecFn is the syscall used to replace this process. Tests substitute it.
 var ExecFn = syscall.Exec
 
+// canonical resolves dir to a comparable absolute path, following symlinks
+// where it can. Two PATH entries naming the same physical directory must
+// compare equal: otherwise a symlinked shim directory escapes the skip in
+// RealBinary and the shim execs itself forever.
+func canonical(dir string) string {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		abs = dir
+	}
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		return resolved
+	}
+	return abs
+}
+
 // RealBinary finds bin on pathEnv, skipping shimDir so a shim never
 // re-invokes itself.
 func RealBinary(bin, pathEnv, shimDir string) (string, error) {
-	skip, err := filepath.Abs(shimDir)
-	if err != nil {
-		skip = shimDir
-	}
+	skip := canonical(shimDir)
 
 	for _, dir := range filepath.SplitList(pathEnv) {
 		if dir == "" {
@@ -31,7 +43,7 @@ func RealBinary(bin, pathEnv, shimDir string) (string, error) {
 		if err != nil {
 			continue
 		}
-		if abs == skip {
+		if canonical(abs) == skip {
 			continue
 		}
 

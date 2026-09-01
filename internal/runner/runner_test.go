@@ -42,6 +42,31 @@ func TestRealBinarySkipsShimDir(t *testing.T) {
 	}
 }
 
+func TestRealBinarySkipsShimDirReachedThroughSymlink(t *testing.T) {
+	root := t.TempDir()
+	shimDir := filepath.Join(root, "shims")
+	realDir := filepath.Join(root, "real")
+	executable(t, shimDir, "railway", "#!/bin/sh\nexit 0\n")
+	want := executable(t, realDir, "railway", "#!/bin/sh\nexit 0\n")
+
+	// A second, lexically different path to the same physical directory —
+	// what a symlinked $HOME or a dotfile manager produces.
+	alias := filepath.Join(root, "alias")
+	if err := os.Symlink(shimDir, alias); err != nil {
+		t.Skipf("symlink não suportado neste ambiente: %v", err)
+	}
+
+	pathEnv := strings.Join([]string{alias, realDir}, string(os.PathListSeparator))
+
+	got, err := runner.RealBinary("railway", pathEnv, shimDir)
+	if err != nil {
+		t.Fatalf("RealBinary: %v", err)
+	}
+	if got != want {
+		t.Errorf("RealBinary = %q, quero %q: o alias simbólico do shim dir deve ser pulado", got, want)
+	}
+}
+
 func TestRealBinaryErrorsWhenOnlyShimExists(t *testing.T) {
 	root := t.TempDir()
 	shimDir := filepath.Join(root, "shims")
