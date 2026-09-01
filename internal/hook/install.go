@@ -21,7 +21,7 @@ func InstallSettings(path, ranmaBin string) error {
 		return err
 	}
 
-	entry := map[string]any{"type": "command", "command": ranmaBin + " hook"}
+	entry := map[string]any{"type": "command", "command": shellQuote(ranmaBin) + " hook"}
 
 	hooks, _ := settings["hooks"].(map[string]any)
 	if hooks == nil {
@@ -79,9 +79,39 @@ func UninstallSettings(path string) error {
 // isRanmaHook reports whether a settings entry is one ranma installed. The
 // match is the executable's base name plus the exact subcommand: a third-party
 // hook whose path merely contains "ranma" must never be removed by us.
+//
+// The command is not split on whitespace: an install path with a space (a
+// normal thing on macOS, where $HOME itself can contain one) is written
+// shell-quoted by shellQuote, so it must be recognized quoted too.
 func isRanmaHook(command string) bool {
-	fields := strings.Fields(command)
-	return len(fields) == 2 && filepath.Base(fields[0]) == "ranma" && fields[1] == "hook"
+	bin, ok := strings.CutSuffix(strings.TrimSpace(command), " hook")
+	if !ok {
+		return false
+	}
+	return filepath.Base(shellUnquote(bin)) == "ranma"
+}
+
+// shellQuote returns s unchanged when it contains no shell metacharacter,
+// and single-quoted otherwise, with embedded single quotes escaped. This is
+// what makes a command written to settings.json survive being handed to a
+// shell as a single argument, even when the ranma binary's path (or, on
+// macOS, $HOME itself) contains a space.
+func shellQuote(s string) string {
+	if !strings.ContainsAny(s, " \t'\"\\$`") {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// shellUnquote undoes shellQuote: it strips a single matching pair of
+// surrounding single quotes and reverses the escaped-quote sequence.
+// Anything not wrapped in single quotes is returned unchanged.
+func shellUnquote(s string) string {
+	if len(s) < 2 || s[0] != '\'' || s[len(s)-1] != '\'' {
+		return s
+	}
+	inner := s[1 : len(s)-1]
+	return strings.ReplaceAll(inner, `'\''`, "'")
 }
 
 // dropRanmaHooks returns list without ranma's own entries, leaving every

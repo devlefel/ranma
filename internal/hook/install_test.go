@@ -134,6 +134,45 @@ func TestInstallSettingsReplacesStaleRanmaPath(t *testing.T) {
 	}
 }
 
+func TestHookSurvivesSpaceInInstallPath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	const ranmaBin = "/home/user/meus binarios/ranma"
+
+	if err := hook.InstallSettings(path, ranmaBin); err != nil {
+		t.Fatalf("InstallSettings: %v", err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("settings.json ficou inválido: %v", err)
+	}
+	if !strings.Contains(string(raw), `'/home/user/meus binarios/ranma' hook`) {
+		t.Errorf("comando gravado não está quotado, quero um caminho com espaço sobrevivendo ao shell:\n%s", raw)
+	}
+
+	// Installing again must recognize its own quoted entry, not stack a
+	// second, broken one.
+	if err := hook.InstallSettings(path, ranmaBin); err != nil {
+		t.Fatalf("InstallSettings #2: %v", err)
+	}
+	raw, _ = os.ReadFile(path)
+	if n := strings.Count(string(raw), "meus binarios/ranma"); n != 1 {
+		t.Errorf("entrada aparece %d vezes após reinstalar, quero 1:\n%s", n, raw)
+	}
+
+	if err := hook.UninstallSettings(path); err != nil {
+		t.Fatalf("UninstallSettings: %v", err)
+	}
+	raw, _ = os.ReadFile(path)
+	if strings.Contains(string(raw), "meus binarios/ranma") {
+		t.Errorf("hook com espaço no caminho sobreviveu ao uninstall:\n%s", raw)
+	}
+}
+
 func TestUninstallSettingsRemovesOnlyRanma(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	original := `{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"rtk.sh"}]}]}}`
