@@ -10,6 +10,7 @@ import (
 
 	"github.com/devlefel/ranma/internal/account"
 	"github.com/devlefel/ranma/internal/cli"
+	"github.com/devlefel/ranma/internal/hook"
 	"github.com/devlefel/ranma/internal/paths"
 	"github.com/devlefel/ranma/internal/provider"
 	"github.com/devlefel/ranma/internal/resolve"
@@ -53,6 +54,8 @@ func main() {
 		err = cmdRm(os.Args[2:])
 	case "shim":
 		err = cmdShim(os.Args[2:])
+	case "hook":
+		err = cmdHook(os.Args[2:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return
@@ -218,5 +221,46 @@ func cmdShim(args []string) error {
 		return nil
 	default:
 		return fmt.Errorf("uso: ranma shim install|uninstall")
+	}
+}
+
+func cmdHook(args []string) error {
+	reg, st, err := load()
+	if err != nil {
+		return err
+	}
+
+	if len(args) == 0 {
+		return hook.Run(os.Stdin, os.Stdout, reg, st)
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	settings := filepath.Join(home, ".claude", "settings.json")
+
+	switch args[0] {
+	case "install":
+		self, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		if self, err = filepath.EvalSymlinks(self); err != nil {
+			return err
+		}
+		if err := hook.InstallSettings(settings, self); err != nil {
+			return err
+		}
+		fmt.Printf("✓ hook registrado em %s (backup em %s.bak)\n", settings, settings)
+		return nil
+	case "uninstall":
+		if err := hook.UninstallSettings(settings); err != nil {
+			return err
+		}
+		fmt.Printf("✓ hook removido de %s\n", settings)
+		return nil
+	default:
+		return fmt.Errorf("uso: ranma hook [install|uninstall]")
 	}
 }
