@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/devlefel/ranma/internal/provider"
@@ -82,6 +83,23 @@ func TestUserFileAddsProvider(t *testing.T) {
 	}
 	if _, ok := reg.ByBin("railway"); !ok {
 		t.Error("providers embutidos sumiram ao carregar o arquivo do usuário")
+	}
+}
+
+func TestLoadRejectsDuplicateBin(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "providers.toml")
+	body := "[railway-work]\nbin = \"railway\"\nenv = { RAILWAY_API_TOKEN = \"{{token}}\" }\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := provider.Load(path)
+	if err == nil {
+		t.Fatal("Load: quero erro por bin duplicado, deu nil")
+	}
+	if !strings.Contains(err.Error(), "railway") {
+		t.Errorf("erro = %q, quero que nomeie o provider railway", err.Error())
 	}
 }
 

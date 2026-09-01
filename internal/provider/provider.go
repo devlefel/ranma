@@ -96,13 +96,19 @@ func Load(userPath string) (*Registry, error) {
 	}
 
 	reg := &Registry{byName: map[string]*Provider{}, byBin: map[string]*Provider{}}
-	for name, p := range defs {
+	for _, name := range slices.Sorted(maps.Keys(defs)) {
+		p := defs[name]
 		p.Name = name
 		if p.Bin == "" {
 			return nil, fmt.Errorf("provider %q: campo bin obrigatório", name)
 		}
 		if len(p.Env) == 0 {
 			return nil, fmt.Errorf("provider %q: campo env obrigatório", name)
+		}
+		if other, clash := reg.byBin[p.Bin]; clash {
+			return nil, fmt.Errorf(
+				"ranma: providers %q e %q declaram o mesmo bin %q; cada executável só pode pertencer a um provider",
+				other.Name, name, p.Bin)
 		}
 		reg.byName[name] = p
 		reg.byBin[p.Bin] = p
