@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/devlefel/ranma/internal/account"
+	"github.com/devlefel/ranma/internal/project"
 	"github.com/devlefel/ranma/internal/provider"
 	"github.com/devlefel/ranma/internal/resolve"
 	"github.com/devlefel/ranma/internal/runner"
@@ -50,10 +51,22 @@ func Doctor(reg *provider.Registry, st *account.Store, cwd, pathEnv, shimDir, ac
 			continue
 		}
 
+		// Read the error's fields rather than re-parsing its rendered text:
+		// VerifyAccounts already does that, and string surgery on Error() breaks
+		// the moment the message format changes.
 		var rerr *resolve.Error
 		detail := err.Error()
 		if errors.As(err, &rerr) {
-			detail = strings.SplitN(strings.TrimPrefix(detail, "✗ ranma: "), "\n", 2)[0]
+			switch rerr.Reason {
+			case resolve.ReasonNoProjectFile:
+				detail = "nenhum " + project.FileName + " encontrado a partir deste diretório"
+			case resolve.ReasonProviderNotDeclared:
+				detail = "não declarado neste projeto"
+			case resolve.ReasonAccountNotFound:
+				detail = fmt.Sprintf("conta %q declarada mas não cadastrada", rerr.Account)
+			case resolve.ReasonMissingField:
+				detail = fmt.Sprintf("conta %q sem o campo %q", rerr.Account, rerr.Field)
+			}
 		}
 		checks = append(checks, Check{Name: name, Detail: detail})
 	}
@@ -62,18 +75,14 @@ func Doctor(reg *provider.Registry, st *account.Store, cwd, pathEnv, shimDir, ac
 }
 
 func checkPath(pathEnv, shimDir string) Check {
-	want, err := filepath.Abs(shimDir)
-	if err != nil {
-		want = shimDir
-	}
+	// Judge the PATH by the same rule interception uses, symlinks included:
+	// telling the user to fix an installation that already works is worse
+	// than saying nothing.
+	want := runner.Canonical(shimDir)
 
 	entries := filepath.SplitList(pathEnv)
 	for i, dir := range entries {
-		abs, err := filepath.Abs(dir)
-		if err != nil {
-			continue
-		}
-		if abs != want {
+		if runner.Canonical(dir) != want {
 			continue
 		}
 		if i == 0 {
@@ -175,24 +184,37 @@ func VerifyAccounts(reg *provider.Registry, st *account.Store, pathEnv, shimDir 
 			cmd := exec.Command(realBin, p.Verify...)
 			cmd.Env = runner.BuildEnv(os.Environ(), res)
 			out, err := cmd.CombinedOutput()
+			safe := redact(string(out), res)
 			if err != nil {
 				checks = append(checks, Check{
 					Name:   name + "/" + acct,
-					Detail: fmt.Sprintf("%s %s falhou: %s", p.Bin, strings.Join(p.Verify, " "), firstLine(out)),
+					Detail: fmt.Sprintf("%s %s falhou: %s", p.Bin, strings.Join(p.Verify, " "), firstLine(safe)),
 				})
 				continue
 			}
 			checks = append(checks, Check{
 				Name: name + "/" + acct, OK: true,
-				Detail: "credencial aceita: " + firstLine(out),
+				Detail: "credencial aceita: " + firstLine(safe),
 			})
 		}
 	}
 	return checks
 }
 
-func firstLine(out []byte) string {
-	line := strings.TrimSpace(strings.SplitN(string(out), "\n", 2)[0])
+// redact removes every injected secret from a provider CLI's output. A CLI
+// that echoes its own credential — a verbose auth error, a debug flag — must
+// never leak it into the doctor report.
+func redact(out string, res *resolve.Resolution) string {
+	for _, value := range res.Env {
+		if len(value) >= 4 {
+			out = strings.ReplaceAll(out, value, "[REDACTED]")
+		}
+	}
+	return out
+}
+
+func firstLine(out string) string {
+	line := strings.TrimSpace(strings.SplitN(out, "\n", 2)[0])
 	if line == "" {
 		return "(sem saída)"
 	}

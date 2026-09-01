@@ -15,11 +15,12 @@ import (
 // ExecFn is the syscall used to replace this process. Tests substitute it.
 var ExecFn = syscall.Exec
 
-// canonical resolves dir to a comparable absolute path, following symlinks
+// Canonical resolves dir to a comparable absolute path, following symlinks
 // where it can. Two PATH entries naming the same physical directory must
 // compare equal: otherwise a symlinked shim directory escapes the skip in
-// RealBinary and the shim execs itself forever.
-func canonical(dir string) string {
+// RealBinary and the shim execs itself forever. Exported because `ranma
+// doctor` must judge the PATH by exactly the rule interception uses.
+func Canonical(dir string) string {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		abs = dir
@@ -33,7 +34,7 @@ func canonical(dir string) string {
 // RealBinary finds bin on pathEnv, skipping shimDir so a shim never
 // re-invokes itself.
 func RealBinary(bin, pathEnv, shimDir string) (string, error) {
-	skip := canonical(shimDir)
+	skip := Canonical(shimDir)
 
 	for _, dir := range filepath.SplitList(pathEnv) {
 		if dir == "" {
@@ -43,7 +44,7 @@ func RealBinary(bin, pathEnv, shimDir string) (string, error) {
 		if err != nil {
 			continue
 		}
-		if canonical(abs) == skip {
+		if Canonical(abs) == skip {
 			continue
 		}
 

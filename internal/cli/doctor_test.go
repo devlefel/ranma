@@ -103,6 +103,51 @@ func TestDoctorChecksAccountsPermissions(t *testing.T) {
 	}
 }
 
+func TestVerifyAccountsRedactsEchoedCredential(t *testing.T) {
+	reg, st := fixture(t, "[railway.lefel]\ntoken = \"rw_SEGREDO_ECOADO\"\n")
+
+	binDir := t.TempDir()
+	// A provider CLI that echoes its own credential, the way a verbose auth
+	// error or a debug flag does.
+	fake := "#!/bin/sh\necho \"auth error: token was: $RAILWAY_API_TOKEN\"\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(binDir, "railway"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	checks := cli.VerifyAccounts(reg, st, binDir, t.TempDir())
+
+	for _, c := range checks {
+		if strings.Contains(c.Detail, "rw_SEGREDO_ECOADO") {
+			t.Fatalf("credencial vazou no relatório do doctor: %+v", c)
+		}
+	}
+	if c := findCheck(t, checks, "railway/lefel"); !strings.Contains(c.Detail, "[REDACTED]") {
+		t.Errorf("quero o marcador de redação no lugar do token, deu: %q", c.Detail)
+	}
+}
+
+func TestDoctorAcceptsShimDirReachedThroughSymlink(t *testing.T) {
+	reg, st := fixture(t, "[railway.lefel]\ntoken = \"rw_x\"\n")
+
+	root := t.TempDir()
+	shimDir := filepath.Join(root, "shims")
+	if err := os.MkdirAll(shimDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(root, "alias")
+	if err := os.Symlink(shimDir, alias); err != nil {
+		t.Skipf("symlink não suportado neste ambiente: %v", err)
+	}
+
+	// runner.RealBinary resolves this alias and intercepts correctly, so
+	// doctor must agree instead of telling the user to fix a working install.
+	checks := cli.Doctor(reg, st, t.TempDir(), alias, shimDir, "/tmp/accounts.toml")
+
+	if c := findCheck(t, checks, "PATH"); !c.OK {
+		t.Errorf("quero PATH ok quando o shim dir é alcançado por symlink: %+v", c)
+	}
+}
+
 func TestPrintChecksReportsFailure(t *testing.T) {
 	var buf bytes.Buffer
 	ok := cli.PrintChecks(&buf, []cli.Check{
