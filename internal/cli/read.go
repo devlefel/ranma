@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"path/filepath"
 	"slices"
@@ -71,6 +72,7 @@ func Whoami(w io.Writer, reg *provider.Registry, st *account.Store, cwd string) 
 
 		var rerr *resolve.Error
 		if !errors.As(err, &rerr) {
+			tw.Flush()
 			return err
 		}
 		switch rerr.Reason {
@@ -101,17 +103,24 @@ func Link(w io.Writer, reg *provider.Registry, st *account.Store, cwd, providerN
 			providerName, accountName, available, providerName, accountName)
 	}
 
+	path := filepath.Join(cwd, project.FileName)
 	use := map[string]string{}
-	existing, err := project.Read(filepath.Join(cwd, project.FileName))
-	if err == nil {
+	existing, err := project.Read(path)
+	switch {
+	case err == nil:
 		use = existing.Use
+	case !errors.Is(err, fs.ErrNotExist):
+		// Never overwrite a file we could not read. It is meant to be
+		// committed and may carry another provider's declaration; losing
+		// that silently is worse than refusing to link.
+		return fmt.Errorf("ranma: %s existe mas não pôde ser lido: %w", path, err)
 	}
 	use[providerName] = accountName
 
 	if err := project.Write(cwd, use); err != nil {
 		return err
 	}
-	fmt.Fprintf(w, "✓ %s → %s (%s)\n", providerName, accountName, filepath.Join(cwd, project.FileName))
+	fmt.Fprintf(w, "✓ %s → %s (%s)\n", providerName, accountName, path)
 	return nil
 }
 

@@ -108,6 +108,45 @@ func TestLinkMergesWithExistingDeclaration(t *testing.T) {
 	}
 }
 
+func TestLinkRefusesToOverwriteUnreadableDeclaration(t *testing.T) {
+	reg, st := fixture(t, "[railway.lefel]\ntoken = \"rw_x\"\n[gh.devlefel]\ntoken = \"gh_x\"\n")
+	cwd := t.TempDir()
+	path := filepath.Join(cwd, project.FileName)
+
+	// A corrupt .ranma.toml that still carries another provider's declaration.
+	if err := os.WriteFile(path, []byte("[use]\ngh = \"devlefel\"\nrailway = \n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := cli.Link(&bytes.Buffer{}, reg, st, cwd, "railway", "lefel"); err == nil {
+		t.Fatal("quero erro: um .ranma.toml ilegível não pode ser sobrescrito às cegas")
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Errorf("o arquivo foi alterado apesar do erro:\nantes:  %q\ndepois: %q", before, after)
+	}
+}
+
+func TestListRejectsUnknownProviderFilter(t *testing.T) {
+	reg, st := fixture(t, "[railway.lefel]\ntoken = \"rw_x\"\n")
+
+	err := cli.List(&bytes.Buffer{}, reg, st, "nuvem")
+	if err == nil {
+		t.Fatal("quero erro para filtro de provider desconhecido, não uma lista vazia")
+	}
+	if !strings.Contains(err.Error(), "railway") {
+		t.Errorf("a mensagem deve listar os providers conhecidos, deu: %v", err)
+	}
+}
+
 func TestLinkRefusesUnknownProviderOrAccount(t *testing.T) {
 	reg, st := fixture(t, "[railway.lefel]\ntoken = \"rw_x\"\n")
 	cwd := t.TempDir()
