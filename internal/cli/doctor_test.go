@@ -126,6 +126,62 @@ func TestVerifyAccountsRedactsEchoedCredential(t *testing.T) {
 	}
 }
 
+func TestVerifyAccountsRedactsPartialAndAlteredEchoes(t *testing.T) {
+	const secret = "rw_SEGREDO_ECOADO_1234567890"
+	reg, st := fixture(t, "[railway.lefel]\ntoken = \""+secret+"\"\n")
+
+	cases := []struct {
+		name string
+		echo string
+	}{
+		{"valor inteiro", `echo "token: $RAILWAY_API_TOKEN"`},
+		{"na segunda linha", `echo primeira; echo "token: $RAILWAY_API_TOKEN"`},
+		{"prefixo truncado", `echo "invalid token, got: $(echo $RAILWAY_API_TOKEN | cut -c1-20)"`},
+		{"em maiúsculas", `echo "token: $(echo $RAILWAY_API_TOKEN | tr a-z A-Z)"`},
+		{"dentro de JSON", `echo "{\"token\":\"$RAILWAY_API_TOKEN\"}"`},
+		{"caminho de sucesso", `echo "ok, autenticado com $RAILWAY_API_TOKEN"; exit 0`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			binDir := t.TempDir()
+			fake := "#!/bin/sh\n" + tc.echo + "\n"
+			if err := os.WriteFile(filepath.Join(binDir, "railway"), []byte(fake), 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			checks := cli.VerifyAccounts(reg, st, binDir, t.TempDir())
+
+			for _, c := range checks {
+				// Nothing longer than what `ranma ls` itself prints may survive.
+				if strings.Contains(strings.ToLower(c.Detail), strings.ToLower(secret[:8])) {
+					t.Errorf("credencial vazou (%s): %q", tc.name, c.Detail)
+				}
+			}
+		})
+	}
+}
+
+func TestRedactLeavesInnocentOutputAlone(t *testing.T) {
+	reg, st := fixture(t, "[railway.lefel]\ntoken = \"rw_SEGREDO_ECOADO_1234567890\"\n")
+
+	binDir := t.TempDir()
+	fake := "#!/bin/sh\necho 'lefel@example.com — plano Pro, 3 projetos'\n"
+	if err := os.WriteFile(filepath.Join(binDir, "railway"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	checks := cli.VerifyAccounts(reg, st, binDir, t.TempDir())
+
+	c := findCheck(t, checks, "railway/lefel")
+	if !strings.Contains(c.Detail, "lefel@example.com") {
+		t.Errorf("saída legítima foi mutilada pela redação: %q", c.Detail)
+	}
+	if strings.Contains(c.Detail, "[REDACTED]") {
+		t.Errorf("redação disparou em saída sem segredo: %q", c.Detail)
+	}
+}
+
 func TestDoctorAcceptsShimDirReachedThroughSymlink(t *testing.T) {
 	reg, st := fixture(t, "[railway.lefel]\ntoken = \"rw_x\"\n")
 

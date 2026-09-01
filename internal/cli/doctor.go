@@ -201,16 +201,58 @@ func VerifyAccounts(reg *provider.Registry, st *account.Store, pathEnv, shimDir 
 	return checks
 }
 
+// minRedact is how much of a secret may never reach the report. It matches
+// what account.Mask already shows, so `doctor --verify` can never print more
+// of a credential than `ranma ls` does.
+const minRedact = 8
+
 // redact removes every injected secret from a provider CLI's output. A CLI
 // that echoes its own credential — a verbose auth error, a debug flag — must
 // never leak it into the doctor report.
+//
+// Matching is deliberately generous, because an exact whole-value match is not
+// how credentials actually escape: CLIs print a truncated prefix, uppercase the
+// value, or wrap it across lines. So any run matching a leading portion of a
+// secret, at least minRedact bytes long, is replaced, case-insensitively.
 func redact(out string, res *resolve.Resolution) string {
 	for _, value := range res.Env {
-		if len(value) >= 4 {
-			out = strings.ReplaceAll(out, value, "[REDACTED]")
+		if len(value) < minRedact {
+			continue
 		}
+		out = redactPrefixes(out, value)
 	}
 	return out
+}
+
+// redactPrefixes replaces every run in out matching a leading portion of
+// secret, at least minRedact bytes long.
+func redactPrefixes(out, secret string) string {
+	var b strings.Builder
+	for i := 0; i < len(out); {
+		n := 0
+		for n < len(secret) && i+n < len(out) && foldEqual(out[i+n], secret[n]) {
+			n++
+		}
+		if n >= minRedact {
+			b.WriteString("[REDACTED]")
+			i += n
+			continue
+		}
+		b.WriteByte(out[i])
+		i++
+	}
+	return b.String()
+}
+
+// foldEqual compares two bytes ignoring ASCII case.
+func foldEqual(a, b byte) bool {
+	if 'A' <= a && a <= 'Z' {
+		a += 'a' - 'A'
+	}
+	if 'A' <= b && b <= 'Z' {
+		b += 'a' - 'A'
+	}
+	return a == b
 }
 
 func firstLine(out string) string {
