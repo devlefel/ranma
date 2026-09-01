@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/devlefel/ranma/internal/account"
@@ -184,7 +185,7 @@ func VerifyAccounts(reg *provider.Registry, st *account.Store, pathEnv, shimDir 
 			cmd := exec.Command(realBin, p.Verify...)
 			cmd.Env = runner.BuildEnv(os.Environ(), res)
 			out, err := cmd.CombinedOutput()
-			safe := redact(string(out), res)
+			safe := redact(string(out), res, fields)
 			if err != nil {
 				checks = append(checks, Check{
 					Name:   name + "/" + acct,
@@ -214,8 +215,33 @@ const minRedact = 8
 // how credentials actually escape: CLIs print a truncated prefix, uppercase the
 // value, or wrap it across lines. So any run matching a leading portion of a
 // secret, at least minRedact bytes long, is replaced, case-insensitively.
-func redact(out string, res *resolve.Resolution) string {
+//
+// The rendered env values are not the only secret shape: a template can wrap
+// a raw account field in surrounding text (env = { AUTHZ = "Bearer
+// {{token}}" }), and a CLI that strips that wrapper before echoing leaks the
+// raw field, which never appears as a prefix of the rendered value. So the
+// raw account fields are redacted too, not just the rendered env.
+//
+// Values are redacted longest first, so a long secret is never left partially
+// exposed because a shorter one (e.g. a field also equal to a prefix of it)
+// consumed the match first.
+//
+// What this does not defend against: a credential the CLI prints encoded —
+// base64, URL-encoded, JSON-escaped — matches no prefix of the raw secret and
+// passes through untouched. Redaction here is prefix matching on the raw
+// bytes, not a decoder for every encoding a CLI might choose.
+func redact(out string, res *resolve.Resolution, fields map[string]string) string {
+	values := make([]string, 0, len(res.Env)+len(fields))
 	for _, value := range res.Env {
+		values = append(values, value)
+	}
+	for _, value := range fields {
+		values = append(values, value)
+	}
+	slices.SortFunc(values, func(a, b string) int {
+		return len(b) - len(a)
+	})
+	for _, value := range values {
 		if len(value) < minRedact {
 			continue
 		}

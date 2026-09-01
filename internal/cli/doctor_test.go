@@ -7,8 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/devlefel/ranma/internal/account"
 	"github.com/devlefel/ranma/internal/cli"
 	"github.com/devlefel/ranma/internal/project"
+	"github.com/devlefel/ranma/internal/provider"
 )
 
 func findCheck(t *testing.T, checks []cli.Check, substr string) cli.Check {
@@ -159,6 +161,47 @@ func TestVerifyAccountsRedactsPartialAndAlteredEchoes(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestVerifyAccountsRedactsRawFieldWrappedInTemplate(t *testing.T) {
+	const secret = "rw_RASTREAVEL_BEARER_5555"
+
+	dir := t.TempDir()
+	providersPath := filepath.Join(dir, "providers.toml")
+	providersBody := "[bearer]\nbin = \"bearerctl\"\nenv = { AUTHZ = \"Bearer {{token}}\" }\nverify = [\"whoami\"]\n"
+	if err := os.WriteFile(providersPath, []byte(providersBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := provider.Load(providersPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	accountsPath := filepath.Join(dir, "accounts.toml")
+	accountsBody := "[bearer.acct]\ntoken = \"" + secret + "\"\n"
+	if err := os.WriteFile(accountsPath, []byte(accountsBody), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := account.Load(accountsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	binDir := t.TempDir()
+	// The env value is "Bearer <token>", never the raw token alone. A CLI
+	// that strips the "Bearer " wrapper before echoing leaks the raw token,
+	// which does not match any rendered env value as a prefix.
+	fake := "#!/bin/sh\necho \"${AUTHZ#Bearer }\"\n"
+	if err := os.WriteFile(filepath.Join(binDir, "bearerctl"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	checks := cli.VerifyAccounts(reg, st, binDir, t.TempDir())
+
+	c := findCheck(t, checks, "bearer/acct")
+	if strings.Contains(strings.ToLower(c.Detail), strings.ToLower(secret[:8])) {
+		t.Fatalf("credencial crua vazou por trás do template: %q", c.Detail)
 	}
 }
 
