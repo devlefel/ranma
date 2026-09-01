@@ -56,6 +56,8 @@ func main() {
 		err = cmdShim(os.Args[2:])
 	case "hook":
 		err = cmdHook(os.Args[2:])
+	case "doctor":
+		err = cmdDoctor(os.Args[2:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return
@@ -222,6 +224,35 @@ func cmdShim(args []string) error {
 	default:
 		return fmt.Errorf("uso: ranma shim install|uninstall")
 	}
+}
+
+func cmdDoctor(args []string) error {
+	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
+	fs.SetOutput(io.Discard) // the flag package prints English usage; main reports the error
+	doVerify := fs.Bool("verify", false, "roda o comando de verificação de cada provider (faz rede)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	reg, st, err := load()
+	if err != nil {
+		return err
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	pathEnv, shimDir := os.Getenv("PATH"), paths.ShimDir()
+	checks := cli.Doctor(reg, st, cwd, pathEnv, shimDir, paths.AccountsFile())
+	if *doVerify {
+		checks = append(checks, cli.VerifyAccounts(reg, st, pathEnv, shimDir)...)
+	}
+
+	if !cli.PrintChecks(os.Stdout, checks) {
+		os.Exit(1)
+	}
+	return nil
 }
 
 func cmdHook(args []string) error {
