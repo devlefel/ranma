@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/devlefel/ranma/internal/account"
+	"github.com/devlefel/ranma/internal/cli"
 	"github.com/devlefel/ranma/internal/paths"
 	"github.com/devlefel/ranma/internal/provider"
 	"github.com/devlefel/ranma/internal/resolve"
@@ -36,6 +37,12 @@ func main() {
 	switch os.Args[1] {
 	case "exec":
 		err = cmdExec(os.Args[2:])
+	case "ls":
+		err = cmdLs(os.Args[2:])
+	case "whoami":
+		err = cmdWhoami()
+	case "link":
+		err = cmdLink(os.Args[2:])
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return
@@ -94,4 +101,43 @@ func cmdExec(args []string) error {
 		return err
 	}
 	return runner.Run(res, realBin, rest)
+}
+
+func cmdLs(args []string) error {
+	reg, st, err := load()
+	if err != nil {
+		return err
+	}
+	filter := ""
+	if len(args) > 0 {
+		filter = args[0]
+	}
+	return cli.List(os.Stdout, reg, st, filter)
+}
+
+func cmdWhoami() error {
+	reg, st, err := load()
+	if err != nil {
+		return err
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	return cli.Whoami(os.Stdout, reg, st, cwd)
+}
+
+func cmdLink(args []string) error {
+	if len(args) != 2 {
+		return fmt.Errorf("uso: ranma link <provider> <conta>")
+	}
+	reg, st, err := load()
+	if err != nil {
+		return err
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	return cli.Link(os.Stdout, reg, st, cwd, args[0], args[1])
 }
