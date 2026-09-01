@@ -100,9 +100,11 @@ rewrites commands, so it composes with rewrite hooks you already have.
 ## Security
 
 - `~/.config/ranma/accounts.toml` is `0600`; ranma refuses to read it otherwise.
-- Credentials are never printed, logged, or passed on a command line — only
-  through the child process environment at `exec` time. `doctor --verify`
-  redacts any credential a provider CLI echoes back at it.
+- A credential reaches a provider only through the child process environment at
+  `exec` time — never a command line, so it never shows up in `ps` or in shell
+  history. It is never logged. The only thing ever printed is a short prefix,
+  by `ranma ls`, so you can tell two accounts apart; `doctor --verify` redacts
+  any longer run a provider CLI echoes back at it.
 - ranma itself makes no network calls: no telemetry, no update check, no remote
   provider registry — definitions ship in the binary. The provider CLI it hands
   off to is of course still talking to its own API, and `doctor --verify` asks
