@@ -73,6 +73,19 @@ func contains(hay []string, needle string) bool {
 	return false
 }
 
+func TestCommandsIgnoresUninvokedFunctionBody(t *testing.T) {
+	// Defining a helper is not running it; denying here would be a false positive.
+	cmds, err := hook.Commands("deploy() { railway up; }")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cmds {
+		if c.Bin == "railway" {
+			t.Errorf("corpo de função nunca chamado virou invocação: %+v", cmds)
+		}
+	}
+}
+
 func TestCommandsKeepsArgsForPassthrough(t *testing.T) {
 	cmds, err := hook.Commands("railway login")
 	if err != nil {

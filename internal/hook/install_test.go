@@ -87,6 +87,53 @@ func TestInstallSettingsIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestUninstallSettingsKeepsLookalikeThirdPartyHook(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	// Contains "ranma" and ends in " hook", but is somebody else's tool.
+	original := `{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[` +
+		`{"type":"command","command":"/opt/company-ranma-audit/pre-commit hook"}]}]}}`
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := hook.InstallSettings(path, "/x/ranma"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := hook.UninstallSettings(path); err != nil {
+		t.Fatalf("UninstallSettings: %v", err)
+	}
+
+	raw, _ := os.ReadFile(path)
+	if strings.Contains(string(raw), "/x/ranma") {
+		t.Error("hook do ranma continua registrado")
+	}
+	if !strings.Contains(string(raw), "company-ranma-audit") {
+		t.Error("hook de terceiro foi removido por engano: o casamento deve ser pelo nome do executável")
+	}
+}
+
+func TestInstallSettingsReplacesStaleRanmaPath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := hook.InstallSettings(path, "/velho/ranma"); err != nil {
+		t.Fatal(err)
+	}
+	if err := hook.InstallSettings(path, "/novo/ranma"); err != nil {
+		t.Fatal(err)
+	}
+
+	raw, _ := os.ReadFile(path)
+	if strings.Contains(string(raw), "/velho/ranma") {
+		t.Error("o caminho antigo do ranma sobreviveu; um binário movido deixaria hook quebrado")
+	}
+	if n := strings.Count(string(raw), "/novo/ranma"); n != 1 {
+		t.Errorf("caminho novo aparece %d vezes, quero 1", n)
+	}
+}
+
 func TestUninstallSettingsRemovesOnlyRanma(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	original := `{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"rtk.sh"}]}]}}`

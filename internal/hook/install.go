@@ -37,10 +37,9 @@ func InstallSettings(path, ranmaBin string) error {
 		}
 		matched = true
 		list, _ := matcher["hooks"].([]any)
-		if hasRanma(list, ranmaBin) {
-			return writeSettings(path, settings)
-		}
-		matcher["hooks"] = append(list, entry)
+		// Drop any ranma entry before appending: this keeps install idempotent
+		// and replaces a stale path when the binary has moved.
+		matcher["hooks"] = append(dropRanmaHooks(list), entry)
 	}
 	if !matched {
 		pre = append(pre, map[string]any{
@@ -72,33 +71,32 @@ func UninstallSettings(path string) error {
 			continue
 		}
 		list, _ := matcher["hooks"].([]any)
-		kept := make([]any, 0, len(list))
-		for _, h := range list {
-			entry, ok := h.(map[string]any)
-			if ok {
-				if cmd, _ := entry["command"].(string); strings.HasSuffix(cmd, " hook") &&
-					strings.Contains(cmd, "ranma") {
-					continue
-				}
-			}
-			kept = append(kept, h)
-		}
-		matcher["hooks"] = kept
+		matcher["hooks"] = dropRanmaHooks(list)
 	}
 	return writeSettings(path, settings)
 }
 
-func hasRanma(list []any, ranmaBin string) bool {
+// isRanmaHook reports whether a settings entry is one ranma installed. The
+// match is the executable's base name plus the exact subcommand: a third-party
+// hook whose path merely contains "ranma" must never be removed by us.
+func isRanmaHook(command string) bool {
+	fields := strings.Fields(command)
+	return len(fields) == 2 && filepath.Base(fields[0]) == "ranma" && fields[1] == "hook"
+}
+
+// dropRanmaHooks returns list without ranma's own entries, leaving every
+// other hook untouched and in order.
+func dropRanmaHooks(list []any) []any {
+	kept := make([]any, 0, len(list))
 	for _, h := range list {
-		entry, ok := h.(map[string]any)
-		if !ok {
-			continue
+		if entry, ok := h.(map[string]any); ok {
+			if cmd, _ := entry["command"].(string); isRanmaHook(cmd) {
+				continue
+			}
 		}
-		if cmd, _ := entry["command"].(string); cmd == ranmaBin+" hook" {
-			return true
-		}
+		kept = append(kept, h)
 	}
-	return false
+	return kept
 }
 
 func readSettings(path string) (map[string]any, error) {

@@ -32,6 +32,11 @@ func Commands(script string) ([]Command, error) {
 
 	var out []Command
 	syntax.Walk(file, func(node syntax.Node) bool {
+		// A function body is not an invocation. Descending into one would deny
+		// a script that merely defines a helper it never calls.
+		if _, ok := node.(*syntax.FuncDecl); ok {
+			return false
+		}
 		call, ok := node.(*syntax.CallExpr)
 		if !ok || len(call.Args) == 0 {
 			return true
@@ -53,6 +58,11 @@ func Commands(script string) ([]Command, error) {
 // Decide reports whether the script must be denied, and why. Anything it
 // cannot understand is allowed: the shims are the actual guarantee, and a
 // hook that guesses wrong is worse than a hook that stays quiet.
+//
+// Known and accepted gaps, all fail-open: a provider invoked through a
+// wrapper (`env railway up`, `sh -c 'railway up'`), through an alias, or from
+// inside a function this script calls is not attributed to the provider. The
+// shim in PATH still catches every one of them.
 func Decide(reg *provider.Registry, st *account.Store, script, cwd string) (string, bool) {
 	cmds, err := Commands(script)
 	if err != nil {
