@@ -247,6 +247,61 @@ func TestDoctorAcceptsShimDirReachedThroughSymlink(t *testing.T) {
 	}
 }
 
+func TestDoctorDoesNotFailForProviderTheProjectDoesNotUse(t *testing.T) {
+	reg, st := fixture(t, "[railway.lefel]\ntoken = \"rw_x\"\n")
+
+	cwd := t.TempDir()
+	if err := project.Write(cwd, map[string]string{"railway": "lefel"}); err != nil {
+		t.Fatal(err)
+	}
+
+	binDir := t.TempDir()
+	for _, bin := range []string{"railway", "gh", "resend"} {
+		if err := os.WriteFile(filepath.Join(binDir, bin), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shimDir := t.TempDir()
+	pathEnv := shimDir + string(os.PathListSeparator) + binDir
+
+	accountsPath := filepath.Join(t.TempDir(), "accounts.toml")
+	if err := os.WriteFile(accountsPath, []byte("[railway.lefel]\ntoken = \"rw_x\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	checks := cli.Doctor(reg, st, cwd, pathEnv, shimDir, accountsPath)
+
+	var buf bytes.Buffer
+	if ok := cli.PrintChecks(&buf, checks); !ok {
+		t.Errorf("providers não usados pelo projeto não podem falhar o doctor:\n%s", buf.String())
+	}
+}
+
+func TestDoctorFlagsUnknownProviderInDeclaration(t *testing.T) {
+	reg, st := fixture(t, "[railway.lefel]\ntoken = \"rw_x\"\n")
+
+	cwd := t.TempDir()
+	if err := project.Write(cwd, map[string]string{"railwey": "lefel"}); err != nil {
+		t.Fatal(err)
+	}
+
+	checks := cli.Doctor(reg, st, cwd, "/usr/bin", t.TempDir(), "/tmp/accounts.toml")
+
+	c := findCheck(t, checks, "railwey")
+	if c.OK || c.Note {
+		t.Errorf("chave desconhecida no .ranma.toml deve falhar, não ser nota: %+v", c)
+	}
+	if !strings.Contains(c.Detail, filepath.Join(cwd, project.FileName)) {
+		t.Errorf("detalhe deve nomear o .ranma.toml culpado: %q", c.Detail)
+	}
+	if !strings.Contains(c.Detail, "railwey") {
+		t.Errorf("detalhe deve nomear a chave errada: %q", c.Detail)
+	}
+	if !strings.Contains(c.Detail, "railway") {
+		t.Errorf("detalhe deve listar os providers conhecidos: %q", c.Detail)
+	}
+}
+
 func TestPrintChecksReportsFailure(t *testing.T) {
 	var buf bytes.Buffer
 	ok := cli.PrintChecks(&buf, []cli.Check{

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +23,10 @@ type Check struct {
 	Name   string
 	Detail string
 	OK     bool
+
+	// Note marks an informational line: there is nothing to fix. A provider
+	// this project does not use, or does not have installed, is normal.
+	Note bool
 }
 
 // Doctor diagnoses the installation and the current directory. It never
@@ -36,9 +41,12 @@ func Doctor(reg *provider.Registry, st *account.Store, cwd, pathEnv, shimDir, ac
 		p, _ := reg.ByName(name)
 
 		if _, err := runner.RealBinary(p.Bin, pathEnv, shimDir); err != nil {
+			// Not having a provider's CLI installed is the normal case for a
+			// machine that never touches it: nothing here needs fixing.
 			checks = append(checks, Check{
 				Name:   name + ": binário",
 				Detail: fmt.Sprintf("%s não está instalado; o ranma não tem o que interceptar", p.Bin),
+				Note:   true,
 			})
 			continue
 		}
@@ -57,21 +65,55 @@ func Doctor(reg *provider.Registry, st *account.Store, cwd, pathEnv, shimDir, ac
 		// the moment the message format changes.
 		var rerr *resolve.Error
 		detail := err.Error()
+		note := false
 		if errors.As(err, &rerr) {
 			switch rerr.Reason {
 			case resolve.ReasonNoProjectFile:
+				// No .ranma.toml at all is the default state of most
+				// directories, not a defect to flag.
 				detail = "nenhum " + project.FileName + " encontrado a partir deste diretório"
+				note = true
 			case resolve.ReasonProviderNotDeclared:
+				// A project that simply does not use this provider is the
+				// normal case, not a failure.
 				detail = "não declarado neste projeto"
+				note = true
 			case resolve.ReasonAccountNotFound:
 				detail = fmt.Sprintf("conta %q declarada mas não cadastrada", rerr.Account)
 			case resolve.ReasonMissingField:
 				detail = fmt.Sprintf("conta %q sem o campo %q", rerr.Account, rerr.Field)
 			}
 		}
-		checks = append(checks, Check{Name: name, Detail: detail})
+		checks = append(checks, Check{Name: name, Detail: detail, Note: note})
 	}
 
+	checks = append(checks, checkUnknownProviders(reg, cwd)...)
+
+	return checks
+}
+
+// checkUnknownProviders flags every key in the project's .ranma.toml that
+// names no provider in the registry — a typo like "railwey" instead of
+// "railway" — pointing at the exact file and the offending key so it is not
+// left as silent "não declarado" noise.
+func checkUnknownProviders(reg *provider.Registry, cwd string) []Check {
+	proj, err := project.Find(cwd)
+	if err != nil || proj == nil {
+		return nil
+	}
+
+	var checks []Check
+	for _, key := range slices.Sorted(maps.Keys(proj.Use)) {
+		if _, ok := reg.ByName(key); ok {
+			continue
+		}
+		checks = append(checks, Check{
+			Name: key + ": provider desconhecido",
+			Detail: fmt.Sprintf(
+				"%s declara %q, que não é um provider conhecido; providers conhecidos: %s",
+				proj.Path, key, strings.Join(reg.Names(), ", ")),
+		})
+	}
 	return checks
 }
 
@@ -124,11 +166,16 @@ func checkPermissions(accountsPath string) Check {
 }
 
 // PrintChecks renders the diagnosis, reporting whether everything passed.
+// A Note never fails the run: ✗ and the exit code are reserved for what the
+// user actually needs to fix.
 func PrintChecks(w io.Writer, checks []Check) bool {
 	all := true
 	for _, c := range checks {
 		mark := "✓"
-		if !c.OK {
+		switch {
+		case c.Note:
+			mark = "·"
+		case !c.OK:
 			mark, all = "✗", false
 		}
 		fmt.Fprintf(w, "%s %s\n    %s\n", mark, c.Name, c.Detail)
