@@ -62,8 +62,14 @@ That file holds **account names only, never credentials** — commit it.
 
 | Command | |
 |---|---|
-| `ranma ls` | registered accounts, credentials masked |
+| `ranma exec <bin> [args...]` | run a provider CLI, resolving the account for this directory |
+| `ranma ls [provider]` | registered accounts, credentials masked |
 | `ranma whoami` | what this directory resolves to |
+| `ranma link <provider> <account>` | declare the account for this project, in `.ranma.toml` |
+| `ranma add [--import] <provider> <account>` | register a credential |
+| `ranma rm <provider> <account>` | remove a registered credential |
+| `ranma shim install\|uninstall` | install or remove the PATH interceptors |
+| `ranma hook install\|uninstall` | register or remove the Claude Code hook |
 | `ranma doctor` | diagnose PATH, permissions, resolution |
 | `ranma doctor --verify` | additionally ask each provider whether the credential still works |
 | `ranma --version` | print the installed version |
@@ -91,11 +97,15 @@ Users can also override or add providers locally in
 
 ## AI agents
 
-Point the agent at the project and it just works: the shims intercept every
-CLI call regardless of which tool made it. For Claude Code, `ranma hook install`
-additionally surfaces the reason inline so the agent reads the fix without
-burning a run. The hook only ever denies with an explanation — it never
-rewrites commands, so it composes with rewrite hooks you already have.
+Point the agent at the project and it just works: the shims intercept any
+invocation by name — `railway up`, whether a person or an agent typed it —
+because that is how PATH lookup, and so command resolution, works. For
+Claude Code, `ranma hook install` additionally surfaces the reason inline so
+the agent reads the fix without burning a run. The hook only ever denies with
+an explanation — it never rewrites commands, so it composes with rewrite
+hooks you already have.
+
+See [Security](#security) for what this does not cover.
 
 ## Security
 
@@ -110,6 +120,25 @@ rewrites commands, so it composes with rewrite hooks you already have.
   provider registry — definitions ship in the binary. The provider CLI it hands
   off to is of course still talking to its own API, and `doctor --verify` asks
   it to.
+
+**What the shim does not cover.** Interception works by putting a shim
+earlier on PATH than the real binary, so it catches any invocation resolved
+by name — `railway up`, `env railway up`, `sh -c 'railway up'` all go through
+PATH lookup and hit the shim. Calling the real CLI by **absolute path**
+(`/usr/local/bin/railway up`) is the one thing that escapes it: PATH lookup
+never happens, so the command reaches the native CLI directly and runs under
+whatever account is active globally for it. `ranma doctor` cannot detect this
+— nothing before `exec` time can tell an agent chose the absolute path on
+purpose.
+
+The optional Claude Code hook (`ranma hook install`) is a separate, weaker
+line of defense: an inline warning that reads the Bash command *before* it
+runs, so it can explain a block instead of just failing. It fails open on a
+provider invoked through a wrapper, an alias, or a shell function — those
+aren't attributed to the provider by its script parser, so no inline warning
+fires. The shim still catches every one of those at actual `exec` time
+(wrappers resolve the binary through PATH same as a direct call); only the
+early warning is missed, not the block itself.
 
 ## License
 

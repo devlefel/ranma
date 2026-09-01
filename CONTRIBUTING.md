@@ -15,7 +15,7 @@ verify = ["whoami"]
 
 | Field | Meaning |
 |---|---|
-| `bin` | executable ranma intercepts |
+| `bin` | executable ranma intercepts; must be unique across every provider, builtin and user-defined — ranma refuses to load if two collide |
 | `env` | env vars to inject; `{{field}}` reads a field from the account |
 | `clear` | env vars removed before exec, so an inherited token cannot win |
 | `passthrough` | subcommands that run without account resolution |
