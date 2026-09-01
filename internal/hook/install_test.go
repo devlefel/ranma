@@ -52,6 +52,23 @@ func TestInstallSettingsPreservesExistingHooks(t *testing.T) {
 	}
 }
 
+func TestInstallSettingsCreatesMissingDirectory(t *testing.T) {
+	// A fresh machine has no ~/.claude at all.
+	path := filepath.Join(t.TempDir(), ".claude", "settings.json")
+
+	if err := hook.InstallSettings(path, "/x/ranma"); err != nil {
+		t.Fatalf("InstallSettings deve criar o diretório ausente, deu: %v", err)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("settings.json não foi criado: %v", err)
+	}
+	if !strings.Contains(string(raw), "/x/ranma") {
+		t.Errorf("hook do ranma ausente:\n%s", raw)
+	}
+}
+
 func TestInstallSettingsIsIdempotent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	if err := os.WriteFile(path, []byte("{}"), 0o644); err != nil {

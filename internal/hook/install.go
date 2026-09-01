@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -132,6 +133,11 @@ func backup(path string) error {
 func writeSettings(path string, settings map[string]any) error {
 	raw, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
+		return err
+	}
+	// A fresh machine may not have ~/.claude yet: installing the hook is a
+	// reasonable first thing to do, and must not fail for a missing directory.
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	return os.WriteFile(path, append(raw, '\n'), 0o644)
