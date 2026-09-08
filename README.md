@@ -140,6 +140,14 @@ fires. The shim still catches every one of those at actual `exec` time
 (wrappers resolve the binary through PATH same as a direct call); only the
 early warning is missed, not the block itself.
 
+## Contributing
+
+Most providers are an 8-line TOML file and no Go at all — see
+[CONTRIBUTING.md](CONTRIBUTING.md). Bugs and provider requests go to
+[Issues](https://github.com/devlefel/ranma/issues); anything that could expose a
+credential goes through [SECURITY.md](SECURITY.md) instead. Participation is
+covered by the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## License
 
 MIT

@@ -1,2 +1,5 @@
 /ranma
 /dist/
+
+# Opt-in local do /bunker: caminho de cofre pessoal, não é config do projeto.
+.bunker.toml
