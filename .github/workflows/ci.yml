@@ -21,4 +21,14 @@ jobs:
           go-version: "1.24"
       - run: go vet ./...
       - run: go test ./... -race
-      - run: gofmt -l . | tee /dev/stderr | (! read)
+      # Not `gofmt -l . | tee /dev/stderr | (! read)`: that pipeline is not
+      # portable (macOS runners use bash 3.2) and, worse, it hides *which*
+      # files are unformatted when it fails.
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Arquivos mal formatados:"
+            echo "$unformatted"
+            exit 1
+          fi
